@@ -138,11 +138,10 @@ class Game:
         self.trump = self.cards[20].suit
 
     def set_as_attacker( self, player ):
-        index = self.players.index( player )
-        modulo_player = lambda x: self.players[ (index+x) % 4]
-
-        self.attacker = [player, modulo_player(2)]
-        self.defender = [modulo_player(1), modulo_player(3)]
+        player.set_as_attacker()
+        self.attacker = player.get_teammates()
+        player.get_opponents()[0].set_as_defender()
+        self.defender = player.get_opponents()
 
     def reset( self ):
         self.trump = ""
@@ -187,7 +186,7 @@ class Game:
         max_index = card_values.index( max(card_values) )
         max_card = played_cards[ max_index ]
         winning_player = self.players[max_index]
-        winning_player.self_score += 1
+        winning_player.increase_trick_score()
         
         print(f"Winning card is: {max_card} by {winning_player}\n")
         return max_index
@@ -215,33 +214,35 @@ class Game:
         defender_string = " Defender"
       
         # If a player went alone
-        for player in self.attacker:
-            if player.going_alone:  
-                attacker_string += " Alone"
-                defender_string += " Alone"
+        if self.attackers[0].is_going_alone():
+            attacker_string += " Alone"
+            defender_string += " Alone"
     
-        attacker_score = self.attacker[0].self_score + self.attacker[1].self_score
-        defender_score = self.defender[0].self_score + self.defender[1].self_score
-        attacker_team_score = SCORING[ str(attacker_score)+attacker_string ]
-        defender_team_score = SCORING[ str(defender_score)+defender_string ]
-        self.attacker[0].team_score = self.attacker[1].team_score = attacker_team_score
-        self.defender[0].team_score = self.defender[1].team_score = defender_team_score
-
+        attacker_score = self.attacker[0].get_trick_score()
+        defender_score = self.defender[0].get_trick_score()
+        attacker_team_score = SCORING[ str(attacker_score)+ attacker_string ]
+        defender_team_score = SCORING[ str(defender_score)+ defender_string ]
+        self.attacker[0].increase_team_score( attacker_team_score )
+        self.defender[0].increase_team_score( defender_team_score )
+        
         print(f"Attackers were {self.attacker}, who won {attacker_score} tricks, and won {attacker_team_score} points.")
         print(f"Defenders were {self.defender}, who won {defender_score} tricks, and won {defender_team_score} points.\n")
         print(f"Players {self.attacker} have {self.attacker[0].team_score} points and")
         print(f"Players {self.defender} have {self.defender[0].team_score} points.\n")
         
-        if( attacker_team_score >= 10):
+        if( self.attacker[0].get_team_score() >= 10):
             return self.attacker
-        if( defender_team_score >= 10):
+        if( self.defender[0].get_team_score() >= 10):
             return self.defender
 
 class Team:
     def __init__(self):
         self.trick_score = 0
         self.team_score = 0
-
+        self.teammates = []
+        self.opponents = []
+        self.going_alone = False
+    
 class Player( Team ):
     def __init__(self, name):
         super().__init__()
@@ -250,13 +251,40 @@ class Player( Team ):
         # self.self_score = 0
         # self.team_score = 0
         self.is_dealer = False
-        self.going_alone = False
+        # self.going_alone = False
         self.can_play = True
-        self.teammate = None
-        self.is_ai =  False
+        # self.teammate = None
+        # self.is_ai =  False
         
     def set_hand(self, hand):
         self.hand = hand
+
+    def is_going_alone( self ):
+        return super().going_alone
+
+    def get_teammates( self ):
+        return super().teammate
+    
+    def get_opponents( self ):
+        return super().opponents
+
+    def set_as_attacker( self ):
+        super().attacker = True
+    
+    def set_as_defender( self ):
+        super().attacker = False
+        
+    def increase_trick_score( self ):
+        super().trick_score += 1
+
+    def increase_team_score( self, score ):
+        super().team_score += score
+
+    def get_trick_score( self ):
+        return super().trick_score
+
+    def get_team_score( self ):
+        return super().team_score
 
     def get_card( self ):
         while True:
@@ -311,8 +339,6 @@ class Player( Team ):
             if answer == "n":
                 return False
             print("Answer wasn't recognized.\n")
-
-    
 
     def pick_trump(self, trump ):
         self.display_hand( f"Current player: {self}\n", self.hand )
@@ -407,8 +433,8 @@ class Player( Team ):
             print("Answer wasn't recognized.\n")
 
     def go_alone( self ):
-        self.going_alone = True
-        self.teammate.can_play = False
+        super().going_alone = True
+        super().teammates[1].can_play = False
             
     def __repr__(self):
         return self.name.upper()
@@ -424,22 +450,30 @@ print( AiP1 )
 if __name__ == "__main__":  
     # Set Up 
     Euchre = Game()
+    Team1 = Team()
+    Team2 = Team()
+
+    p1 = Player( Team1 )
+    p2 = Player( Team2 )
+    p3 = Player( Team1 )
+    p4 = Player( Team2 )
+
+    Team1.teammates = [p1,p3]
+    Team1.opponents = [p2,p4]
+    Team2.teammates = [p2,p4]
+    Team2.opponents = [p1,p3]
+
+    Euchre.players = [p1,p2,p3,p4]
 
     Suits = ("Hearts","Diamonds","Clubs","Spades")
     Ranks = ("Nine","Ten","Jack","Queen","King","Ace")
     Names = ("player1", "player2", "player3", "player4")
 
-    # Set up cards in Euchre object
-    for i in range(4): 
-        Euchre.add_players( Player(Names[i]) )
-        for j in range(6):
-            Euchre.add_card( Card(Ranks[j], Suits[i]) )
+    for i in range(6): 
+        for j in range(4):
+            Euchre.add_card( Card(Ranks[i], Suits[j]) )
 
-    # Set up teammates for going alone
-    Euchre.players[0].teammate = Euchre.players[2]
-    Euchre.players[1].teammate = Euchre.players[3]
-    Euchre.players[2].teammate = Euchre.players[0]
-    Euchre.players[3].teammate = Euchre.players[1]
+    
 
     # Set player 3 as dealer so when run Euchre.change_dealer() its player 1 who's dealer
     Euchre.players[3].is_dealer = True
